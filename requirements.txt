@@ -1,0 +1,7 @@
+streamlit
+google-generativeai
+SpeechRecognition
+streamlit-mic-recorder
+google-api-python-client
+python-dotenv
+requests
