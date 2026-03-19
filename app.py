@@ -75,18 +75,6 @@ def murf_audio(text):
     except: pass
     return None
 
-def transcribe_audio(audio_bytes):
-    try:
-        import whisper
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            f.write(audio_bytes)
-            tmp_path = f.name
-        model  = whisper.load_model("base")
-        result = model.transcribe(tmp_path)
-        os.unlink(tmp_path)
-        return result.get("text","").strip()
-    except: return ""
-
 def get_google_auth_url():
     params = {"client_id":GOOGLE_CLIENT_ID,"redirect_uri":REDIRECT_URI,
               "response_type":"code","scope":"openid email profile",
@@ -105,376 +93,524 @@ def exchange_code_for_user(code):
 
 st.set_page_config(page_title="EchoLearn 🎓", page_icon="🎓", layout="centered", initial_sidebar_state="collapsed")
 
-st.markdown("""
+# ── THEME STATE ───────────────────────────────────────
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
+
+theme = st.session_state.theme
+
+# ── THEME COLORS ──────────────────────────────────────
+if theme == "dark":
+    BG_START     = "#aa076b"
+    BG_END       = "#61045f"
+    BG_BASE      = "#3D0030"
+    FONT_PRIMARY = "#FFFFFF"
+    FONT_ACC     = "#FFD700"
+    FONT_SUB     = "rgba(255,255,255,0.85)"
+    CARD_BG      = "rgba(0,0,0,0.35)"
+    BORDER       = "rgba(255,255,255,0.15)"
+    HERO_BG      = "rgba(0,0,0,0.3)"
+    BTN_START    = "#aa076b"
+    BTN_END      = "#61045f"
+    NAV_BG       = "rgba(0,0,0,0.4)"
+    INPUT_BG     = "rgba(0,0,0,0.3)"
+    QUOTE_BORDER = "#FFD700"
+    ANIM_COLOR1  = "rgba(170,7,107,0.6)"
+    ANIM_COLOR2  = "rgba(97,4,95,0.7)"
+    ANIM_COLOR3  = "rgba(200,0,150,0.4)"
+else:
+    BG_START     = "#1a2980"
+    BG_END       = "#26d0ce"
+    BG_BASE      = "#0D1F6E"
+    FONT_PRIMARY = "#FFFFFF"
+    FONT_ACC     = "#FFE566"
+    FONT_SUB     = "rgba(255,255,255,0.9)"
+    CARD_BG      = "rgba(0,30,80,0.4)"
+    BORDER       = "rgba(255,255,255,0.2)"
+    HERO_BG      = "rgba(0,20,60,0.35)"
+    BTN_START    = "#1a2980"
+    BTN_END      = "#26d0ce"
+    NAV_BG       = "rgba(0,20,60,0.5)"
+    INPUT_BG     = "rgba(0,30,80,0.3)"
+    QUOTE_BORDER = "#FFE566"
+    ANIM_COLOR1  = "rgba(26,41,128,0.6)"
+    ANIM_COLOR2  = "rgba(38,208,206,0.5)"
+    ANIM_COLOR3  = "rgba(0,100,200,0.4)"
+
+st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
 
 /* ── BASE ── */
-html, body, [class*="css"], .stApp {
+html, body, [class*="css"], .stApp {{
     font-family: 'Inter', sans-serif !important;
-    background: #000D1A !important;
+    background: {BG_BASE} !important;
     min-height: 100vh;
-    color: #E0F7F4 !important;
-}
-.block-container {
+    color: {FONT_PRIMARY} !important;
+}}
+.block-container {{
     background: transparent !important;
     padding-top: 0.5rem !important;
     max-width: 780px !important;
-}
+}}
 
-/* ── OCEAN GREEN + DEEP BLUE ANIMATED BACKGROUND ── */
-.stApp::before {
+/* ── ANIMATED GRADIENT BACKGROUND ── */
+.stApp::before {{
+    content: '';
+    position: fixed; inset: 0; z-index: -2;
+    background: linear-gradient(135deg, {BG_START}, {BG_END});
+    animation: none;
+}}
+.stApp::after {{
     content: '';
     position: fixed; inset: 0; z-index: -1;
     background:
-        radial-gradient(ellipse at 0% 0%,   rgba(0,128,128,0.5)  0%, transparent 55%),
-        radial-gradient(ellipse at 100% 0%,  rgba(0,50,180,0.55)  0%, transparent 55%),
-        radial-gradient(ellipse at 50% 100%, rgba(0,150,120,0.35) 0%, transparent 60%),
-        radial-gradient(ellipse at 100% 100%,rgba(0,30,120,0.5)   0%, transparent 55%),
-        radial-gradient(ellipse at 50% 50%,  rgba(0,80,100,0.25)  0%, transparent 70%);
-    background-color: #000D1A;
-    animation: bgPulse 8s ease-in-out infinite alternate;
-}
-@keyframes bgPulse {
-    0%   { opacity: 0.85; filter: hue-rotate(0deg); }
-    50%  { opacity: 1;    filter: hue-rotate(15deg); }
-    100% { opacity: 0.9;  filter: hue-rotate(-10deg); }
-}
+        radial-gradient(ellipse at 0% 0%,   {ANIM_COLOR1} 0%, transparent 50%),
+        radial-gradient(ellipse at 100% 100%, {ANIM_COLOR2} 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%,  {ANIM_COLOR3} 0%, transparent 60%);
+    animation: bgFloat 12s ease-in-out infinite alternate;
+}}
 
-/* ── ANIMATIONS ── */
-@keyframes fadeUp  { from{opacity:0;transform:translateY(28px)} to{opacity:1;transform:translateY(0)} }
-@keyframes popIn   { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
-@keyframes float   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
-@keyframes glow    { 0%,100%{box-shadow:0 0 20px rgba(0,180,160,0.4)} 50%{box-shadow:0 0 50px rgba(0,100,200,0.7)} }
-@keyframes shimmer {
-    0%   { transform:translateX(-100%) rotate(45deg); }
-    100% { transform:translateX(300%) rotate(45deg); }
-}
-@keyframes borderGlow {
-    0%,100% { border-color: rgba(0,150,130,0.5); }
-    50%     { border-color: rgba(0,80,200,0.8); }
-}
+/* ── KEYFRAMES ── */
+@keyframes bgFloat {{
+    0%   {{ opacity: 0.7; transform: scale(1)    rotate(0deg); }}
+    33%  {{ opacity: 1;   transform: scale(1.05) rotate(2deg); }}
+    66%  {{ opacity: 0.85;transform: scale(0.98) rotate(-2deg); }}
+    100% {{ opacity: 1;   transform: scale(1.02) rotate(1deg); }}
+}}
+@keyframes fadeUp    {{ from{{opacity:0;transform:translateY(30px)}} to{{opacity:1;transform:translateY(0)}} }}
+@keyframes fadeLeft  {{ from{{opacity:0;transform:translateX(-30px)}} to{{opacity:1;transform:translateX(0)}} }}
+@keyframes fadeRight {{ from{{opacity:0;transform:translateX(30px)}} to{{opacity:1;transform:translateX(0)}} }}
+@keyframes popIn     {{ from{{opacity:0;transform:scale(0.8)}} to{{opacity:1;transform:scale(1)}} }}
+@keyframes float     {{ 0%,100%{{transform:translateY(0)}} 50%{{transform:translateY(-14px)}} }}
+@keyframes pulse     {{ 0%,100%{{box-shadow:0 0 0 0 rgba(255,255,255,0.3)}} 50%{{box-shadow:0 0 0 12px rgba(255,255,255,0)}} }}
+@keyframes shimmer   {{ 0%{{transform:translateX(-100%) rotate(45deg)}} 100%{{transform:translateX(300%) rotate(45deg)}} }}
+@keyframes spin      {{ from{{transform:rotate(0deg)}} to{{transform:rotate(360deg)}} }}
+@keyframes borderPulse {{
+    0%,100% {{ border-color: rgba(255,255,255,0.2); }}
+    50%     {{ border-color: rgba(255,255,255,0.5); }}
+}}
+@keyframes glowText {{
+    0%,100% {{ text-shadow: 0 0 10px rgba(255,255,255,0.3); }}
+    50%     {{ text-shadow: 0 0 30px rgba(255,255,255,0.8), 0 0 60px rgba(255,255,255,0.4); }}
+}}
+@keyframes cardEntrance {{
+    0%   {{ opacity:0; transform: translateY(40px) scale(0.95); }}
+    100% {{ opacity:1; transform: translateY(0)   scale(1); }}
+}}
+@keyframes dotBounce {{
+    0%,100% {{ transform: translateY(0); }}
+    50%     {{ transform: translateY(-8px); }}
+}}
+@keyframes ripple {{
+    0%   {{ transform: scale(0); opacity: 1; }}
+    100% {{ transform: scale(4); opacity: 0; }}
+}}
 
-.page { animation: fadeUp .6s ease both; }
-.pop  { animation: popIn .5s ease both; }
+.page  {{ animation: fadeUp   .65s cubic-bezier(.16,1,.3,1) both; }}
+.pop   {{ animation: popIn    .55s cubic-bezier(.16,1,.3,1) both; }}
+.left  {{ animation: fadeLeft .55s cubic-bezier(.16,1,.3,1) both; }}
+.right {{ animation: fadeRight .55s cubic-bezier(.16,1,.3,1) both; }}
 
 /* ── HERO ── */
-.hero {
-    background: linear-gradient(135deg, #001A2E 0%, #003D3D 40%, #001830 70%, #002040 100%);
-    border-radius: 22px;
-    padding: 44px 32px;
-    text-align: center;
-    margin-bottom: 18px;
-    border: 1px solid rgba(0,180,160,0.3);
-    box-shadow: 0 0 60px rgba(0,120,130,0.3), 0 16px 40px rgba(0,0,0,0.5);
-    position: relative; overflow: hidden;
-    animation: fadeUp .8s ease both, borderGlow 3s ease-in-out infinite;
-}
-.hero::before {
-    content: '';
-    position: absolute;
-    top: -50%; left: -50%; width: 30px; height: 300%;
-    background: rgba(255,255,255,0.04);
-    transform: rotate(45deg);
-    animation: shimmer 4s ease-in-out infinite;
-}
-.hero h1 {
-    font-family: 'Outfit', sans-serif !important;
-    color: #FFFFFF !important;
-    font-size: 2.8rem; font-weight: 800;
-    margin: 0; letter-spacing: 0.5px;
-    text-shadow: 0 0 30px rgba(0,220,200,0.5);
-}
-.hero p {
-    color: rgba(255,255,255,0.8) !important;
-    font-size: 1rem; margin-top: 8px; font-weight: 500;
-}
-
-/* ── NAVBAR ── */
-.navbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: rgba(0,20,40,0.8);
-    backdrop-filter: blur(20px);
-    border-radius: 14px;
-    padding: 10px 20px;
-    margin-bottom: 18px;
-    border: 1px solid rgba(0,150,130,0.3);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-    position: sticky; top: 8px; z-index: 999;
-    animation: borderGlow 3s ease-in-out infinite;
-}
-.nav-brand {
-    font-family: 'Outfit', sans-serif !important;
-    font-weight: 800; font-size: 1.2rem;
-    color: #FFFFFF !important;
-}
-.nav-links { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.nav-btn {
-    background: rgba(0,150,130,0.15);
-    border: 1px solid rgba(0,150,130,0.3);
-    border-radius: 50px;
-    padding: 5px 14px;
-    color: #7FFFD4 !important;
-    font-size: 0.8rem; font-weight: 600;
-    cursor: pointer; transition: all .2s;
-    text-decoration: none;
-}
-.nav-btn:hover { background: rgba(0,150,130,0.35); color: #fff !important; }
-
-/* ── CARDS ── */
-.card {
-    background: rgba(0,30,50,0.6);
-    backdrop-filter: blur(16px);
-    border-radius: 18px;
-    padding: 22px 24px;
-    margin: 10px 0;
-    border: 1px solid rgba(0,150,130,0.2);
-    box-shadow: 0 6px 24px rgba(0,0,0,0.3);
-    animation: fadeUp .5s ease both;
-    position: relative; overflow: hidden;
-}
-.card::after {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(0,220,180,0.4), transparent);
-}
-
-/* ── LOGIN BOX ── */
-.login-box {
-    background: rgba(0,20,40,0.85);
+.hero {{
+    background: {HERO_BG};
     backdrop-filter: blur(24px);
     border-radius: 24px;
-    padding: 40px 36px;
-    max-width: 440px; margin: auto;
-    border: 1px solid rgba(0,150,130,0.35);
-    box-shadow: 0 0 60px rgba(0,100,120,0.3), 0 20px 60px rgba(0,0,0,0.5);
-    animation: popIn .7s ease both;
-}
-.login-box h2 {
+    padding: 48px 32px;
+    text-align: center;
+    margin-bottom: 20px;
+    border: 1px solid {BORDER};
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+    position: relative; overflow: hidden;
+    animation: cardEntrance .8s cubic-bezier(.16,1,.3,1) both, borderPulse 3s ease-in-out infinite;
+}}
+.hero::before {{
+    content: '';
+    position: absolute; top: -50%; left: -50%;
+    width: 30px; height: 300%;
+    background: rgba(255,255,255,0.06);
+    transform: rotate(45deg);
+    animation: shimmer 5s ease-in-out infinite;
+}}
+.hero::after {{
+    content: '';
+    position: absolute; top: -100px; right: -100px;
+    width: 300px; height: 300px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
+    animation: spin 20s linear infinite;
+}}
+.hero h1 {{
     font-family: 'Outfit', sans-serif !important;
-    color: #FFFFFF !important;
-    font-size: 1.9rem; text-align: center;
-    margin-bottom: 4px; font-weight: 700;
-}
-.login-subtitle {
-    text-align: center; color: rgba(255,255,255,0.6) !important;
-    font-size: .9rem; margin-bottom: 20px;
-}
-.google-btn {
+    color: {FONT_PRIMARY} !important;
+    font-size: 2.8rem; font-weight: 800;
+    margin: 0; letter-spacing: 0.5px;
+    animation: glowText 3s ease-in-out infinite;
+}}
+.hero p {{
+    color: {FONT_SUB} !important;
+    font-size: 1rem; margin-top: 8px; font-weight: 500;
+}}
+
+/* ── NAVBAR ── */
+.navbar {{
+    display: flex; align-items: center; justify-content: space-between;
+    background: {NAV_BG};
+    backdrop-filter: blur(24px);
+    border-radius: 16px; padding: 10px 20px; margin-bottom: 18px;
+    border: 1px solid {BORDER};
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    position: sticky; top: 8px; z-index: 999;
+    animation: fadeUp .5s ease both;
+}}
+.nav-brand {{
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 800; font-size: 1.2rem;
+    color: {FONT_PRIMARY} !important;
+    animation: glowText 3s ease-in-out infinite;
+}}
+.nav-links {{ display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }}
+.nav-btn {{
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 50px; padding: 5px 14px;
+    color: {FONT_ACC} !important;
+    font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; transition: all .25s ease;
+    text-decoration: none; position: relative; overflow: hidden;
+}}
+.nav-btn:hover {{
+    background: rgba(255,255,255,0.25);
+    color: {FONT_PRIMARY} !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}}
+
+/* ── CARDS ── */
+.card {{
+    background: {CARD_BG};
+    backdrop-filter: blur(20px);
+    border-radius: 20px; padding: 22px 24px; margin: 12px 0;
+    border: 1px solid {BORDER};
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
+    animation: cardEntrance .6s cubic-bezier(.16,1,.3,1) both;
+    position: relative; overflow: hidden;
+    transition: transform .3s ease, box-shadow .3s ease;
+}}
+.card:hover {{
+    transform: translateY(-3px);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+}}
+.card::after {{
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+}}
+
+/* ── LOGIN BOX ── */
+.login-box {{
+    background: {CARD_BG};
+    backdrop-filter: blur(28px);
+    border-radius: 28px; padding: 44px 40px; max-width: 460px; margin: auto;
+    border: 1px solid {BORDER};
+    box-shadow: 0 24px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    animation: popIn .75s cubic-bezier(.16,1,.3,1) both;
+}}
+.login-box h2 {{
+    font-family: 'Outfit', sans-serif !important;
+    color: {FONT_PRIMARY} !important;
+    font-size: 2rem; text-align: center; margin-bottom: 4px; font-weight: 800;
+    animation: glowText 3s ease-in-out infinite;
+}}
+.login-subtitle {{
+    text-align: center; color: {FONT_SUB} !important;
+    font-size: .9rem; margin-bottom: 22px;
+}}
+.google-btn {{
     display: flex; align-items: center; justify-content: center; gap: 10px;
-    background: rgba(255,255,255,0.95);
+    background: rgba(255,255,255,0.96);
     border: none; border-radius: 50px;
-    padding: 12px 24px; width: 100%; margin-bottom: 12px;
+    padding: 13px 24px; width: 100%; margin-bottom: 14px;
     font-family: 'Inter', sans-serif !important;
-    font-weight: 600; font-size: 14px;
-    color: #1A1A1A !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-    text-decoration: none; transition: all .2s; cursor: pointer;
-}
-.google-btn:hover { transform: scale(1.02); }
-.divider {
-    text-align: center; color: rgba(255,255,255,0.3) !important;
-    font-size: .8rem; margin: 10px 0; position: relative;
-}
-.divider::before,.divider::after {
+    font-weight: 700; font-size: 14px; color: #1A1A1A !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    text-decoration: none; transition: all .25s; cursor: pointer;
+    position: relative; overflow: hidden;
+}}
+.google-btn:hover {{ transform: scale(1.02); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }}
+.divider {{
+    text-align: center; color: {FONT_SUB} !important;
+    font-size: .8rem; margin: 12px 0; position: relative;
+}}
+.divider::before,.divider::after {{
     content: ''; position: absolute; top: 50%;
-    width: 36%; height: 1px; background: rgba(255,255,255,.15);
-}
-.divider::before{left:0} .divider::after{right:0}
+    width: 36%; height: 1px; background: rgba(255,255,255,.2);
+}}
+.divider::before{{left:0}} .divider::after{{right:0}}
 
 /* ── SECTION TITLES ── */
-.sec-title {
+.sec-title {{
     font-family: 'Outfit', sans-serif !important;
     font-size: 1rem; font-weight: 700;
-    color: #00E5CC !important;
+    color: {FONT_ACC} !important;
     margin-bottom: 10px;
     display: flex; align-items: center; gap: 8px;
-}
+    animation: fadeLeft .5s ease both;
+}}
 
 /* ── BUTTONS ── */
-.stButton>button {
-    background: linear-gradient(135deg, #005F5F, #003080) !important;
-    color: #FFFFFF !important;
+.stButton>button {{
+    background: linear-gradient(135deg, {BTN_START}, {BTN_END}) !important;
+    color: {FONT_PRIMARY} !important;
     border-radius: 50px !important;
-    padding: 12px 28px !important;
-    font-size: 15px !important; font-weight: 600 !important;
+    padding: 13px 32px !important;
+    font-size: 15px !important; font-weight: 700 !important;
     font-family: 'Inter', sans-serif !important;
-    border: 1px solid rgba(0,200,180,0.3) !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
     width: 100%;
-    box-shadow: 0 4px 20px rgba(0,100,120,0.4) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
     transition: all .3s ease !important;
-}
-.stButton>button:hover {
-    transform: scale(1.03) !important;
-    box-shadow: 0 8px 30px rgba(0,150,180,0.6) !important;
-    background: linear-gradient(135deg, #007A7A, #0040A0) !important;
-}
+    position: relative; overflow: hidden;
+    animation: pulse 2.5s ease-in-out infinite;
+}}
+.stButton>button:hover {{
+    transform: scale(1.04) translateY(-2px) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4) !important;
+    border-color: rgba(255,255,255,0.5) !important;
+}}
 
 /* ── BACK BUTTON ── */
-.back-btn>button {
-    background: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.15) !important;
-    color: rgba(255,255,255,0.7) !important;
+.back-btn>button {{
+    background: rgba(255,255,255,0.08) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    color: {FONT_PRIMARY} !important;
     font-size: 13px !important; font-weight: 500 !important;
     padding: 6px 16px !important; border-radius: 50px !important;
     animation: none !important; box-shadow: none !important; width: auto !important;
-}
-.back-btn>button:hover { background: rgba(255,255,255,0.12) !important; }
+}}
+.back-btn>button:hover {{ background: rgba(255,255,255,0.18) !important; }}
 
 /* ── BUDDY SLIDER ── */
-.buddy-slider {
+.buddy-slider {{
     display: flex; align-items: center; justify-content: center;
-    gap: 24px; margin: 20px 0;
-}
-.buddy-main {
-    background: linear-gradient(135deg, rgba(0,60,80,0.7), rgba(0,30,100,0.7));
+    gap: 28px; margin: 24px 0;
+}}
+.buddy-main {{
+    background: rgba(255,255,255,0.1);
     backdrop-filter: blur(12px);
-    border-radius: 22px;
-    width: 170px; height: 170px;
+    border-radius: 24px; width: 180px; height: 180px;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    border: 2px solid rgba(0,200,180,0.35);
-    box-shadow: 0 0 40px rgba(0,150,160,0.3);
-    cursor: pointer; transition: all .3s ease;
-    animation: float 3s ease-in-out infinite, glow 3s ease-in-out infinite;
-}
-.buddy-main:hover {
-    border-color: #00E5CC;
-    box-shadow: 0 0 60px rgba(0,220,200,0.5);
-    transform: scale(1.05);
-}
-.buddy-emoji { font-size: 4.5rem; display: block; }
-.buddy-name-label {
+    border: 2px solid rgba(255,255,255,0.25);
+    box-shadow: 0 0 40px rgba(255,255,255,0.1), 0 20px 40px rgba(0,0,0,0.3);
+    cursor: pointer; transition: all .35s ease;
+    animation: float 3s ease-in-out infinite, pulse 2.5s ease-in-out infinite;
+}}
+.buddy-main:hover {{
+    border-color: {FONT_ACC};
+    box-shadow: 0 0 60px rgba(255,255,255,0.2), 0 20px 50px rgba(0,0,0,0.4);
+    transform: scale(1.06);
+}}
+.buddy-emoji {{ font-size: 4.5rem; display: block; }}
+.buddy-name-label {{
     font-family: 'Outfit', sans-serif;
-    font-weight: 600; font-size: .9rem;
-    color: #00E5CC; margin-top: 6px;
-}
-.arrow-btn {
-    background: rgba(0,100,100,0.3);
-    border: 1px solid rgba(0,180,160,0.3);
-    border-radius: 50%; width: 44px; height: 44px;
+    font-weight: 700; font-size: .95rem;
+    color: {FONT_ACC}; margin-top: 8px;
+}}
+.arrow-btn {{
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 50%; width: 48px; height: 48px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.2rem; color: white; transition: all .2s ease;
-}
-.arrow-btn:hover { background: rgba(0,150,150,0.5); transform: scale(1.1); }
+    font-size: 1.3rem; color: {FONT_PRIMARY}; transition: all .25s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}}
+.arrow-btn:hover {{
+    background: rgba(255,255,255,0.25);
+    transform: scale(1.15);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}}
 
 /* ── WELCOME ── */
-.welcome-big {
-    background: linear-gradient(135deg, rgba(0,60,80,0.6), rgba(0,30,100,0.5));
-    backdrop-filter: blur(16px);
-    border-radius: 24px; padding: 44px 32px; text-align: center;
-    border: 1px solid rgba(0,180,160,0.3);
-    box-shadow: 0 0 60px rgba(0,100,120,0.3), 0 16px 40px rgba(0,0,0,0.4);
-    animation: popIn .8s ease both;
-}
-.welcome-big .buddy { font-size: 5.5rem; animation: float 2.5s ease-in-out infinite; display: block; }
-.welcome-big h1 {
+.welcome-big {{
+    background: {CARD_BG};
+    backdrop-filter: blur(20px);
+    border-radius: 28px; padding: 48px 32px; text-align: center;
+    border: 1px solid {BORDER};
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    animation: popIn .9s cubic-bezier(.16,1,.3,1) both;
+}}
+.welcome-big .buddy {{
+    font-size: 6rem;
+    animation: float 2.5s ease-in-out infinite;
+    display: block;
+    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+}}
+.welcome-big h1 {{
     font-family: 'Outfit', sans-serif !important;
-    color: #FFFFFF !important; font-size: 2.5rem; margin: 12px 0 8px; font-weight: 800;
-    text-shadow: 0 0 20px rgba(0,220,200,0.4);
-}
-.welcome-big p { color: rgba(255,255,255,0.8) !important; font-size: 1rem; line-height: 1.9; }
+    color: {FONT_PRIMARY} !important; font-size: 2.6rem; margin: 12px 0 8px; font-weight: 800;
+    animation: glowText 3s ease-in-out infinite;
+}}
+.welcome-big p {{ color: {FONT_SUB} !important; font-size: 1rem; line-height: 1.9; }}
 
 /* ── NOTEBOOK MODAL ── */
-.notebook-modal {
+.notebook-modal {{
     position: fixed; top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     z-index: 9999; width: 90%; max-width: 500px;
-    background: linear-gradient(135deg, #001A2E, #003040);
-    border-radius: 22px; padding: 30px;
-    border: 1px solid rgba(0,180,160,0.3);
-    box-shadow: 0 0 80px rgba(0,100,120,0.5), 0 24px 60px rgba(0,0,0,0.6);
-    animation: popIn .4s ease both;
-}
-.notebook-modal h3 {
+    background: linear-gradient(135deg, {BG_START}DD, {BG_END}DD);
+    backdrop-filter: blur(28px);
+    border-radius: 24px; padding: 32px;
+    border: 1px solid {BORDER};
+    box-shadow: 0 0 100px rgba(0,0,0,0.5), 0 24px 80px rgba(0,0,0,0.6);
+    animation: popIn .45s cubic-bezier(.16,1,.3,1) both;
+}}
+.notebook-modal h3 {{
     font-family: 'Outfit', sans-serif !important;
-    color: #00E5CC !important; font-size: 1.3rem;
-    font-weight: 700; margin: 0 0 14px;
-}
+    color: {FONT_ACC} !important; font-size: 1.3rem;
+    font-weight: 700; margin: 0 0 16px;
+}}
 
 /* ── QUOTE FIXED ── */
-.quote-fixed {
-    position: fixed; bottom: 18px; right: 18px;
-    max-width: 250px; z-index: 1000;
-    background: rgba(0,20,40,0.85);
-    backdrop-filter: blur(16px);
-    border-radius: 16px; padding: 14px 16px;
-    border: 1px solid rgba(0,150,130,0.3);
-    border-left: 3px solid #00E5CC;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-    animation: float 4s ease-in-out infinite;
-}
-.quote-fixed p {
-    font-size: .85rem; color: #FFFFFF !important;
+.quote-fixed {{
+    position: fixed; bottom: 20px; right: 20px;
+    max-width: 255px; z-index: 1000;
+    background: {CARD_BG};
+    backdrop-filter: blur(20px);
+    border-radius: 18px; padding: 14px 16px;
+    border: 1px solid {BORDER};
+    border-left: 3px solid {QUOTE_BORDER};
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    animation: float 5s ease-in-out infinite;
+}}
+.quote-fixed p {{
+    font-size: .85rem; color: {FONT_PRIMARY} !important;
     margin: 0 0 4px; line-height: 1.5; font-weight: 400;
-}
-.quote-fixed span { font-size: .72rem; color: #00E5CC !important; }
+}}
+.quote-fixed span {{ font-size: .72rem; color: {FONT_ACC} !important; font-weight: 600; }}
 
 /* ── YOUTUBE CARDS ── */
-.yt-card {
-    background: rgba(0,30,50,0.6);
-    backdrop-filter: blur(10px);
-    border-radius: 14px; overflow: hidden;
-    border: 1px solid rgba(0,150,130,0.2);
-    border-top: 3px solid #005F7A;
-    transition: transform .3s ease;
-    animation: popIn .5s ease both; margin-bottom: 10px;
-}
-.yt-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,150,160,0.3); }
-.yt-card img { width: 100%; display: block; }
-.yt-body { padding: 9px 11px; }
-.yt-title { font-weight: 600; font-size: .82rem; color: #FFFFFF !important; margin: 0 0 3px; }
-.yt-ch { font-size: .74rem; color: rgba(255,255,255,0.5) !important; }
+.yt-card {{
+    background: {CARD_BG};
+    backdrop-filter: blur(12px);
+    border-radius: 16px; overflow: hidden;
+    border: 1px solid {BORDER};
+    border-top: 3px solid {FONT_ACC};
+    transition: all .35s ease;
+    animation: cardEntrance .5s cubic-bezier(.16,1,.3,1) both;
+    margin-bottom: 10px;
+}}
+.yt-card:hover {{
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    border-top-color: {FONT_PRIMARY};
+}}
+.yt-card img {{ width: 100%; display: block; transition: transform .3s ease; }}
+.yt-card:hover img {{ transform: scale(1.05); }}
+.yt-body {{ padding: 10px 12px; }}
+.yt-title {{ font-weight: 600; font-size: .83rem; color: {FONT_PRIMARY} !important; margin: 0 0 3px; }}
+.yt-ch {{ font-size: .74rem; color: {FONT_SUB} !important; }}
 
 /* ── DOTS ── */
-.dots { display: flex; justify-content: center; gap: 6px; margin: 8px 0 18px; }
-.dot  { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.15); }
-.dot-on { width: 22px; height: 8px; border-radius: 4px; background: linear-gradient(90deg,#005F7A,#00E5CC); }
+.dots {{ display: flex; justify-content: center; gap: 8px; margin: 10px 0 20px; }}
+.dot  {{
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    animation: dotBounce 1.5s ease-in-out infinite;
+}}
+.dot:nth-child(2) {{ animation-delay: .15s; }}
+.dot:nth-child(3) {{ animation-delay: .30s; }}
+.dot-on {{
+    width: 24px; height: 8px; border-radius: 4px;
+    background: linear-gradient(90deg, {FONT_ACC}, {FONT_PRIMARY});
+    animation: pulse 2s ease-in-out infinite;
+}}
 
 /* ── QUIZ ── */
-.quiz-card {
-    background: rgba(0,30,50,0.5);
+.quiz-card {{
+    background: rgba(255,255,255,0.06);
     border-radius: 14px; padding: 16px 18px; margin: 8px 0;
-    border: 1px solid rgba(0,150,130,0.2);
-    animation: fadeUp .4s ease both;
-}
-.quiz-q { font-family: 'Outfit', sans-serif; font-weight: 700; color: #00E5CC !important; font-size: .95rem; margin-bottom: 10px; }
+    border: 1px solid {BORDER};
+    animation: cardEntrance .4s ease both;
+    transition: transform .2s ease;
+}}
+.quiz-card:hover {{ transform: translateX(4px); }}
+.quiz-q {{
+    font-family: 'Outfit', sans-serif; font-weight: 700;
+    color: {FONT_ACC} !important; font-size: .95rem; margin-bottom: 10px;
+}}
 
 /* ── HISTORY CARD ── */
-.hist-card {
-    background: rgba(0,30,50,0.5);
+.hist-card {{
+    background: rgba(255,255,255,0.06);
     border-radius: 12px; padding: 12px 14px; margin: 6px 0;
-    border-left: 3px solid #00E5CC;
-}
+    border-left: 3px solid {FONT_ACC};
+    animation: fadeLeft .4s ease both;
+    transition: transform .2s ease;
+}}
+.hist-card:hover {{ transform: translateX(4px); }}
 
 /* ── INPUTS ── */
-div[data-testid="stTextInput"] input {
-    border-radius: 10px !important;
-    border: 1px solid rgba(0,150,130,0.3) !important;
-    padding: 11px 14px !important;
-    background: rgba(0,30,50,0.6) !important;
-    color: #FFFFFF !important;
+div[data-testid="stTextInput"] input {{
+    border-radius: 12px !important;
+    border: 1px solid {BORDER} !important;
+    padding: 12px 16px !important;
+    background: {INPUT_BG} !important;
+    color: {FONT_PRIMARY} !important;
     font-family: 'Inter', sans-serif !important;
     font-size: .95rem !important;
-}
-div[data-testid="stTextInput"] input::placeholder { color: rgba(255,255,255,0.35) !important; }
-div[data-testid="stTextInput"] input:focus { border-color: #00E5CC !important; box-shadow: 0 0 0 2px rgba(0,229,204,0.2) !important; }
-.stSelectbox>div>div { border-radius: 10px !important; border: 1px solid rgba(0,150,130,0.3) !important; background: rgba(0,30,50,0.6) !important; color: #FFFFFF !important; }
-div[data-testid="stTextArea"] textarea { border-radius: 10px !important; border: 1px solid rgba(0,150,130,0.3) !important; background: rgba(0,30,50,0.6) !important; color: #FFFFFF !important; font-family: 'Inter', sans-serif !important; }
-div[data-testid="stChatMessage"] { background: rgba(0,30,50,0.5) !important; border-radius: 14px !important; border: 1px solid rgba(0,150,130,0.15) !important; }
-.stCheckbox label { color: rgba(255,255,255,0.85) !important; font-size: .9rem !important; }
-.streamlit-expanderHeader { background: rgba(0,30,50,0.5) !important; border-radius: 10px !important; color: #FFFFFF !important; }
-div[data-testid="stVerticalBlock"]>div:empty { display: none !important; }
-.element-container:empty { display: none !important; }
-.stRadio label { color: rgba(255,255,255,0.85) !important; font-size: .9rem !important; }
+    transition: all .25s ease !important;
+}}
+div[data-testid="stTextInput"] input::placeholder {{ color: rgba(255,255,255,0.4) !important; }}
+div[data-testid="stTextInput"] input:focus {{
+    border-color: {FONT_ACC} !important;
+    box-shadow: 0 0 0 3px rgba(255,215,0,0.15) !important;
+    transform: scale(1.01) !important;
+}}
+.stSelectbox>div>div {{
+    border-radius: 12px !important; border: 1px solid {BORDER} !important;
+    background: {INPUT_BG} !important; color: {FONT_PRIMARY} !important;
+}}
+div[data-testid="stTextArea"] textarea {{
+    border-radius: 12px !important; border: 1px solid {BORDER} !important;
+    background: {INPUT_BG} !important; color: {FONT_PRIMARY} !important;
+    font-family: 'Inter', sans-serif !important;
+}}
+div[data-testid="stChatMessage"] {{
+    background: rgba(255,255,255,0.06) !important;
+    border-radius: 16px !important; border: 1px solid {BORDER} !important;
+    animation: fadeUp .4s ease both;
+}}
+.stCheckbox label {{ color: {FONT_PRIMARY} !important; font-size: .9rem !important; }}
+.streamlit-expanderHeader {{
+    background: rgba(255,255,255,0.07) !important;
+    border-radius: 12px !important; color: {FONT_PRIMARY} !important;
+}}
+div[data-testid="stVerticalBlock"]>div:empty {{ display: none !important; }}
+.element-container:empty {{ display: none !important; }}
+.stRadio label {{ color: {FONT_PRIMARY} !important; font-size: .9rem !important; }}
+p, span, li, label {{ color: {FONT_PRIMARY} !important; }}
+h1, h2, h3, h4 {{ color: {FONT_PRIMARY} !important; }}
+
+/* ── THEME TOGGLE ── */
+.theme-toggle {{
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 50px; padding: 6px 14px;
+    cursor: pointer; font-size: .82rem;
+    color: {FONT_ACC} !important; font-weight: 600;
+    transition: all .25s ease;
+}}
+.theme-toggle:hover {{ background: rgba(255,255,255,0.2); }}
 
 /* ── FOOTER ── */
-.footer {
-    text-align: center; color: rgba(255,255,255,0.3) !important;
-    font-size: .85rem; margin-top: 36px; padding: 16px;
-}
+.footer {{
+    text-align: center; color: {FONT_SUB} !important;
+    font-size: .85rem; margin-top: 40px; padding: 18px;
+    animation: fadeUp .5s ease both;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -486,7 +622,8 @@ defaults = {
     "quiz_questions": [], "quiz_answers": {}, "quiz_submitted": False,
     "show_notebook": False, "note_text": "",
     "quote": random.choice(QUOTES),
-    "followup_audio": None
+    "followup_audio": None,
+    "theme": "dark"
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -506,7 +643,7 @@ if "code" in query_params and st.session_state.page == "login":
         st.rerun()
 
 def footer():
-    st.markdown('<div class="footer">Made with ❤️ by EchoLearn &nbsp;|&nbsp; Powered by Gemini AI & Murf AI</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="footer">Made with ❤️ by EchoLearn &nbsp;|&nbsp; Powered by Gemini AI & Murf AI 🤖</div>', unsafe_allow_html=True)
 
 def show_navbar():
     page    = st.session_state.get("page","")
@@ -514,7 +651,8 @@ def show_navbar():
     picture = st.session_state.get("user_picture","")
     if page in ["login","buddy","welcome"]: return
 
-    avatar = f'<img src="{picture}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;"/>' if picture else "👤"
+    avatar = f'<img src="{picture}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);"/>' if picture else "👤"
+    theme_icon = "🌙 Dark" if st.session_state.theme == "light" else "☀️ Light"
 
     st.markdown(f"""
     <div class="navbar">
@@ -523,14 +661,14 @@ def show_navbar():
             <span class="nav-btn">📚 Learn</span>
             <span class="nav-btn">🕒 History</span>
             <span class="nav-btn">📓 Notebook</span>
-            <span style="display:flex;align-items:center;gap:6px;background:rgba(0,150,130,0.15);border-radius:50px;padding:4px 12px;border:1px solid rgba(0,150,130,0.3);">
+            <span style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.1);border-radius:50px;padding:4px 12px;border:1px solid rgba(255,255,255,0.2);">
                 {avatar}
-                <span style="font-size:.8rem;color:#7FFFD4;font-weight:600;">{name}</span>
+                <span style="font-size:.8rem;color:{FONT_ACC};font-weight:600;">{name}</span>
             </span>
         </div>
     </div>""", unsafe_allow_html=True)
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         if st.button("📚 Learn", key="nav_learn"):
             st.session_state.page = "subject"
@@ -545,6 +683,10 @@ def show_navbar():
             st.session_state.show_notebook = True
             st.rerun()
     with c4:
+        if st.button(theme_icon, key="nav_theme"):
+            st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
+            st.rerun()
+    with c5:
         if st.button("🚪 Logout", key="nav_out"):
             for k in list(st.session_state.keys()): del st.session_state[k]
             st.rerun()
@@ -583,15 +725,23 @@ def show_notebook_modal():
 
     notes = load_notes()
     if notes:
-        st.markdown('<p style="color:#00E5CC;font-weight:600;margin-top:14px;font-size:.9rem;">Recent Notes:</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="color:{FONT_ACC};font-weight:600;margin-top:14px;font-size:.9rem;">Recent Notes:</p>', unsafe_allow_html=True)
         for n in notes[:3]:
-            st.markdown(f'<div class="hist-card"><p style="color:#FFFFFF;font-size:.83rem;margin:0;">{n["note"][:100]}...</p><p style="color:rgba(255,255,255,.4);font-size:.73rem;margin:3px 0 0;">{n["date"]}</p></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="hist-card"><p style="color:{FONT_PRIMARY};font-size:.83rem;margin:0;">{n["note"][:100]}...</p><p style="color:{FONT_SUB};font-size:.73rem;margin:3px 0 0;">{n["date"]}</p></div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════
 # PAGE 1 — LOGIN
 # ════════════════════════════════════════════════
 if st.session_state.page == "login":
+    # Theme toggle on login
+    col_t1, col_t2, col_t3 = st.columns([3,1,1])
+    with col_t3:
+        toggle_label = "☀️ Light" if st.session_state.theme == "dark" else "🌙 Dark"
+        if st.button(toggle_label, key="login_theme"):
+            st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
+            st.rerun()
+
     st.markdown("""
     <div class="hero">
         <h1>🎓 EchoLearn</h1>
@@ -640,8 +790,8 @@ elif st.session_state.page == "buddy":
     st.markdown('<div class="dots"><div class="dot-on"></div><div class="dot"></div></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<p class="sec-title">Swipe and pick your favourite!</p>', unsafe_allow_html=True)
-    st.markdown(f'<p style="text-align:center;color:rgba(255,255,255,.4);font-size:.82rem;margin-bottom:10px;">{idx+1} / {len(ANIMALS)}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="sec-title">Swipe and pick your favourite!</p>', unsafe_allow_html=True)
+    st.markdown(f'<p style="text-align:center;color:{FONT_SUB};font-size:.82rem;margin-bottom:10px;">{idx+1} / {len(ANIMALS)}</p>', unsafe_allow_html=True)
 
     st.markdown(f"""
     <div class="buddy-slider">
@@ -687,10 +837,10 @@ elif st.session_state.page == "welcome":
         <p>
             Welcome to <strong>EchoLearn</strong>!<br>
             Your buddy <strong>{buddy_name}</strong> is ready to learn with you! 🌟<br><br>
-            🎙️ Speak or type what you want to learn<br>
             📚 Get instant AI-powered lessons<br>
             📺 Watch curated YouTube videos<br>
-            📝 Take notes and test yourself with quizzes
+            🧠 Test yourself with quizzes<br>
+            📝 Take notes and track history
         </p>
     </div>""", unsafe_allow_html=True)
 
@@ -715,7 +865,7 @@ elif st.session_state.page == "subject":
 
     st.markdown(f"""
     <div class="hero page">
-        <div style="font-size:3rem;animation:float 2s ease-in-out infinite;display:inline-block;">{buddy}</div>
+        <div style="font-size:3rem;animation:float 2s ease-in-out infinite;display:inline-block;filter:drop-shadow(0 8px 16px rgba(0,0,0,0.3));">{buddy}</div>
         <h1 style="font-size:2rem;">What are we studying?</h1>
         <p>{buddy_name} is ready to dive in with you!</p>
     </div>""", unsafe_allow_html=True)
@@ -749,7 +899,7 @@ elif st.session_state.page == "subject":
     footer()
 
 # ════════════════════════════════════════════════
-# PAGE 5 — TOPIC + SPEECH TO TEXT
+# PAGE 5 — TOPIC (No speech to text)
 # ════════════════════════════════════════════════
 elif st.session_state.page == "topic":
     show_navbar()
@@ -762,7 +912,7 @@ elif st.session_state.page == "topic":
 
     st.markdown(f"""
     <div class="hero page">
-        <div style="font-size:3rem;animation:float 2s ease-in-out infinite;display:inline-block;">{buddy}</div>
+        <div style="font-size:3rem;animation:float 2s ease-in-out infinite;display:inline-block;filter:drop-shadow(0 8px 16px rgba(0,0,0,0.3));">{buddy}</div>
         <h1 style="font-size:2rem;">What do you want to learn?</h1>
         <p>Explore anything in <strong>{subject}</strong>!</p>
     </div>""", unsafe_allow_html=True)
@@ -774,54 +924,11 @@ elif st.session_state.page == "topic":
     typed = st.text_input("", placeholder="e.g. Photosynthesis, Black Holes, Machine Learning…", label_visibility="collapsed", key="tt")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="card page">', unsafe_allow_html=True)
-    st.markdown('<p class="sec-title">🎙️ Or speak your topic</p>', unsafe_allow_html=True)
-
-    voice_topic = ""
-    try:
-        from audio_recorder_streamlit import audio_recorder
-        audio_bytes = audio_recorder(
-            text="Click to record",
-            recording_color="#00E5CC",
-            neutral_color="#005F7A",
-            icon_size="2x", key="audio_rec"
-        )
-        if audio_bytes:
-            with st.spinner("Transcribing..."):
-                voice_topic = transcribe_audio(audio_bytes)
-            if voice_topic:
-                st.success(f"Got it: **{voice_topic}**")
-            else:
-                st.info("Try again or type below.")
-    except:
-        try:
-            from streamlit_mic_recorder import mic_recorder
-            import speech_recognition as sr
-            audio = mic_recorder(start_prompt="🎙️ Speak", stop_prompt="⏹️ Stop", key="mic_t")
-            if audio and audio.get("bytes"):
-                with st.spinner("Listening..."):
-                    try:
-                        rec = sr.Recognizer()
-                        rec.energy_threshold = 300
-                        rec.dynamic_energy_threshold = True
-                        ad = sr.AudioData(audio["bytes"], audio["sample_rate"], 2)
-                        voice_topic = rec.recognize_google(ad, language="en-US")
-                        if voice_topic:
-                            st.success(f"Got it: **{voice_topic}**")
-                    except:
-                        st.info("Please type your topic below.")
-        except:
-            st.info("Please type your topic below.")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    final_topic = voice_topic if voice_topic else typed
-
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         if st.button("🚀 Start Learning!"):
-            if final_topic.strip():
-                st.session_state.topic          = final_topic.strip()
+            if typed.strip():
+                st.session_state.topic          = typed.strip()
                 st.session_state.messages       = []
                 st.session_state.lesson_text    = ""
                 st.session_state.quiz_questions = []
@@ -829,7 +936,7 @@ elif st.session_state.page == "topic":
                 st.session_state.page           = "results"
                 st.rerun()
             else:
-                st.warning("Please type or speak a topic!")
+                st.warning("Please type a topic!")
     footer()
 
 # ════════════════════════════════════════════════
@@ -955,7 +1062,7 @@ Be warm and encouraging. Use emojis. Mention {name} once!"""
                         </a>""", unsafe_allow_html=True)
             else:
                 encoded = urllib.parse.quote(f"{topic} {subject}")
-                st.markdown(f'<a href="https://www.youtube.com/results?search_query={encoded}" target="_blank" style="color:#00E5CC;">Search YouTube for {topic}</a>', unsafe_allow_html=True)
+                st.markdown(f'<a href="https://www.youtube.com/results?search_query={encoded}" target="_blank" style="color:{FONT_ACC};">Search YouTube for {topic}</a>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.messages:
@@ -1029,12 +1136,12 @@ Answer: [A/B/C/D]"""
                     st.markdown(f"""
                     <div class="quiz-card">
                         <p class="quiz-q">{icon} Q{qi+1}: {qitem["q"]}</p>
-                        <p style="color:rgba(255,255,255,.6);font-size:.85rem;">Your answer: {user_ans} | Correct: {correct}</p>
+                        <p style="color:{FONT_SUB};font-size:.85rem;">Your answer: {user_ans} | Correct: {correct}</p>
                     </div>""", unsafe_allow_html=True)
 
                 st.markdown(f"""
-                <div style="text-align:center;margin:14px 0;">
-                    <p style="font-family:'Outfit',sans-serif;font-size:1.4rem;font-weight:800;color:#00E5CC;">
+                <div style="text-align:center;margin:16px 0;animation:popIn .5s ease both;">
+                    <p style="font-family:'Outfit',sans-serif;font-size:1.5rem;font-weight:800;color:{FONT_ACC};">
                         {"🏆 Perfect!" if score==3 else "👍 Good job!" if score>=2 else "📚 Keep studying!"} {score}/3
                     </p>
                 </div>""", unsafe_allow_html=True)
@@ -1101,20 +1208,20 @@ elif st.session_state.page == "history":
 
     st.markdown(f"""
     <div class="hero page">
-        <div style="font-size:3rem;">{buddy}</div>
+        <div style="font-size:3rem;filter:drop-shadow(0 8px 16px rgba(0,0,0,0.3));">{buddy}</div>
         <h1 style="font-size:2rem;">Learning History</h1>
         <p>Everything you have learned, {name}!</p>
     </div>""", unsafe_allow_html=True)
 
     history = load_history()
     if not history:
-        st.markdown("""
+        st.markdown(f"""
         <div class="card" style="text-align:center;">
-            <p style="font-size:3rem;">📭</p>
-            <p style="color:rgba(255,255,255,.5);">No lessons yet! Go learn something amazing!</p>
+            <p style="font-size:3rem;animation:float 3s ease-in-out infinite;display:inline-block;">📭</p>
+            <p style="color:{FONT_SUB};">No lessons yet! Go learn something amazing!</p>
         </div>""", unsafe_allow_html=True)
     else:
-        st.markdown(f'<p style="color:rgba(255,255,255,.4);margin-bottom:8px;font-size:.85rem;">📚 {len(history)} lessons completed</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="color:{FONT_SUB};margin-bottom:8px;font-size:.85rem;">📚 {len(history)} lessons completed</p>', unsafe_allow_html=True)
         for item in history:
             with st.expander(f"📖 {item['subject']} — {item['topic']} | {item['date']}"):
                 st.write(item["lesson"])
@@ -1124,7 +1231,7 @@ elif st.session_state.page == "history":
         st.markdown('<div class="card page">', unsafe_allow_html=True)
         st.markdown('<p class="sec-title">📓 My Notes</p>', unsafe_allow_html=True)
         for n in notes:
-            st.markdown(f'<div class="hist-card"><p style="color:#FFFFFF;font-size:.88rem;margin:0;">{n["note"]}</p><p style="color:rgba(255,255,255,.35);font-size:.73rem;margin:3px 0 0;">{n["subject"]} | {n["date"]}</p></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="hist-card"><p style="color:{FONT_PRIMARY};font-size:.88rem;margin:0;">{n["note"]}</p><p style="color:{FONT_SUB};font-size:.73rem;margin:3px 0 0;">{n["subject"]} | {n["date"]}</p></div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     footer()
